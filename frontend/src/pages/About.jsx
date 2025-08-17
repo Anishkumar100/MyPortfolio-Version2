@@ -63,7 +63,7 @@ export const About = () => {
           {/* Introduction Section with Profile Picture */}
           <section className="flex flex-col md:flex-row items-center md:items-start gap-20 mb-16 border-b-2 border-indigo-500/20 pb-12 animate-fadeInSlideUp animate-delay-100">
             <div className="w-48 h-48 flex-shrink-0 relative group">
-              <div className="absolute inset-0 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.5), transparent 70%)' }}></div>
+              <div className="absolute inset-0 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 max-sm:mb-5" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.5), transparent 70%)' }}></div>
               <img
                 src={assets.myself}
                 alt="Anish"
