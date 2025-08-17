@@ -29,7 +29,7 @@ export const Header = () => {
         className=" 
     relative
     w-full max-w-4xl
-    mx-auto top-28 mb-10  max-sm:top-28 flex flex-col items-center justify-center
+    mx-auto top-28 mb-10  max-sm:top-20 flex flex-col items-center justify-center
     px-4 sm:px-6 md:px-8 lg:px-12
     text-center text-white 
   
