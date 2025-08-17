@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-y: scroll; /* hides default scrollbars */
+  background-color: black;
+  -ms-overflow-style: none;
+}
+
+/* For WebKit browsers (Chrome, Safari) */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent; /* optional: just make scrollbar invisible */
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+
+
+#root > div {
+  height: 100vh; /* make sure root children fill viewport */
+}
+
+
+
+
+main {
+  height: 100%;
+
+}
