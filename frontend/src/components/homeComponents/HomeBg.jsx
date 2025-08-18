@@ -162,18 +162,18 @@ void main() {
 export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
-  starSpeed = 0.7,
-  density = 0.6,
+  starSpeed = 0.5,
+  density = 0.5,
   hueShift = 140,
   disableAnimation = false,
   speed = 1.0,
   mouseInteraction = true,
-  glowIntensity = 0.6,
+  glowIntensity = 0.5,
   saturation = 1,
   mouseRepulsion = true,
   repulsionStrength = 1,
   twinkleIntensity = 0.6,
-  rotationSpeed = 0.3,
+  rotationSpeed = 0.2,
   autoCenterRepulsion = 0,
   transparent = false,
   backgroundColor = '#000000',
@@ -184,6 +184,11 @@ export default function HomeBg({
   const smoothMousePos = useRef({ x: 0.5, y: 0.5 });
   const targetMouseActive = useRef(0.0);
   const smoothMouseActive = useRef(0.0);
+
+  // OPTIMIZATION: Memoize array props to prevent the useEffect from re-running unnecessarily.
+  // This is a crucial optimization to stop the WebGL context from being destroyed and recreated.
+  const memoizedFocal = useMemo(() => focal, [focal]);
+  const memoizedRotation = useMemo(() => rotation, [rotation]);
 
   useEffect(() => {
     if (!ctnDom.current) return;
@@ -206,8 +211,6 @@ export default function HomeBg({
 
     let program;
 
-    // OPTIMIZATION: This function now renders the canvas at a lower resolution
-    // and lets CSS scale it up. This is the most effective performance boost.
     function resize() {
       const scale = 0.5; // Render at 50% resolution
       const dpr = Math.min(window.devicePixelRatio, 2); // Cap DPR at 2 for performance
@@ -244,8 +247,8 @@ export default function HomeBg({
             gl.canvas.width / gl.canvas.height
           ),
         },
-        uFocal: { value: new Float32Array(focal) },
-        uRotation: { value: new Float32Array(rotation) },
+        uFocal: { value: new Float32Array(memoizedFocal) },
+        uRotation: { value: new Float32Array(memoizedRotation) },
         uStarSpeed: { value: starSpeed },
         uDensity: { value: density },
         uHueShift: { value: hueShift },
@@ -322,8 +325,9 @@ export default function HomeBg({
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
-    focal,
-    rotation,
+    // MODIFICATION: Using the memoized values in the dependency array
+    memoizedFocal,
+    memoizedRotation,
     starSpeed,
     density,
     hueShift,
