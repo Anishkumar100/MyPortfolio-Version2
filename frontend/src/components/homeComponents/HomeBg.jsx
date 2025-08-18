@@ -75,7 +75,7 @@ float Star(vec2 uv, float flare, float size) {
 
     // Create a starburst pattern for the rays
     float angle = atan(uv.y, uv.x);
-    float rays = cos(angle * 10.0) * 0.6 + 0.6; // 4 points for the star
+    float rays = cos(angle * 40.0) * 0.6 + 0.6; // 4 points for the star
     rays = pow(rays, 20.0);
     
     // Combine the rays with a radial falloff
@@ -160,7 +160,7 @@ export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
   starSpeed = 0.5,
-  density = 0.7,
+  density = 0.6,
   hueShift = 140,
   disableAnimation = false,
   speed = 1.0,
