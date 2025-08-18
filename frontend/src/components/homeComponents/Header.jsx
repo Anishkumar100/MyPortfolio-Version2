@@ -76,6 +76,7 @@ export const Header = () => {
               text-sm sm:text-base md:text-lg
               font-semibold
               text-gray-300
+              
             "
               style={{
                 animation: "scrollLeft 30s linear infinite",
@@ -87,7 +88,7 @@ export const Header = () => {
           </div>
 
           {/* Professional summary */}
-          <p className="text-gray-400 text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed break-words">
+          <p className="text-gray-400 text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed break-words max-sm:text-justify">
             <DecryptedText
               text=" I specialize in developing high-quality, scalable web applications that combine elegant design with optimal performance. My focus is on creating intuitive, responsive experiences that engage users across devices."
               speed={800}
