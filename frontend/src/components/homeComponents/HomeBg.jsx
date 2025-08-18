@@ -75,14 +75,14 @@ float Star(vec2 uv, float flare, float size) {
 
     // Create a starburst pattern for the rays
     float angle = atan(uv.y, uv.x);
-    float rays = sin(angle * 4.0) * 0.5 + 0.5; // 4 points for the star
+    float rays = cos(angle * 10.0) * 0.9 + 0.9; // 4 points for the star
     rays = pow(rays, 20.0);
     
     // Combine the rays with a radial falloff
-    float starburst = rays * smoothstep(star_size * 3.0, 0.0, d) * flare * uGlowIntensity;
+    float starburst = rays * smoothstep(star_size * 4.0, 0.1, d) * flare * uGlowIntensity;
 
     // A softer, wider glow behind the star
-    float glow = smoothstep(star_size * 6.0, 0.0, d) * 0.15 * uGlowIntensity;
+    float glow = smoothstep(star_size * 6.0, 0.0, d) * 0.30 * uGlowIntensity;
 
     return core + starburst + glow;
 }
