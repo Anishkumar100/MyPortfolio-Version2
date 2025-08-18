@@ -72,12 +72,11 @@ float Star(vec2 uv, float flare) {
   uv *= MAT45;
   rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
   m += rays * 0.3 * flare * uGlowIntensity;
-  m *= smoothstep(1.0, 0.2, d);
+  // MODIFICATION: Softer falloff for a less pixelated glow
+  m *= smoothstep(1.0, 0.1, d);
   return m;
 }
 
-// OPTIMIZATION: The nested for loop has been completely removed.
-// This is the most significant performance gain, reducing calculations by nearly 90%.
 vec3 StarLayer(vec2 uv) {
   vec3 col = vec3(0.0);
   vec2 gv = fract(uv) - 0.5; 
@@ -154,6 +153,32 @@ void main() {
 }
 `;
 
+// MODIFICATION: Slightly larger max star size
+class Pixel {
+  constructor(canvas, context, x, y, color, speed, delay) {
+    this.width = canvas.width;
+    this.height = canvas.height;
+    this.ctx = context;
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.speed = this.getRandomValue(0.1, 0.9) * speed;
+    this.size = 0;
+    this.sizeStep = Math.random() * 0.4;
+    this.minSize = 0.5;
+    this.maxSizeInteger = 3; // Changed from 2 to 3
+    this.maxSize = this.getRandomValue(this.minSize, this.maxSizeInteger);
+    this.delay = delay;
+    this.counter = 0;
+    this.counterStep = Math.random() * 4 + (this.width + this.height) * 0.01;
+    this.isIdle = false;
+    this.isReverse = false;
+    this.isShimmer = false;
+  }
+  // ... rest of Pixel class is unchanged
+}
+
+
 export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
@@ -206,7 +231,8 @@ export default function HomeBg({
     let program;
 
     function resize() {
-      const scale = 0.5;
+      // MODIFICATION: Increased render scale for better visual quality
+      const scale = 0.75; 
       const dpr = Math.min(window.devicePixelRatio, 2);
       const canvasWidth = ctn.offsetWidth * dpr * scale;
       const canvasHeight = ctn.offsetHeight * dpr * scale;
