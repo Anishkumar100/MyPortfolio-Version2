@@ -86,16 +86,8 @@ vec3 StarLayer(vec2 uv) {
   float glossLocal = tri(uStarSpeed / (PERIOD * seed + 1.0));
   float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
   
-  float red = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(id + 1.0)) + STAR_COLOR_CUTOFF;
-  float blu = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(id + 3.0)) + STAR_COLOR_CUTOFF;
-  float grn = min(red, blu) * seed;
-  vec3 base = vec3(red, grn, blu);
-  
-  float hue = atan(base.g - base.r, base.b - base.r) / (2.0 * 3.14159) + 0.5;
-  hue = fract(hue + uHueShift / 360.0);
-  float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
-  float val = max(max(base.r, base.g), base.b);
-  base = hsv2rgb(vec3(hue, sat, val));
+  float hue = fract(seed * 10.0 + uHueShift / 360.0);
+  vec3 base = hsv2rgb(vec3(hue, uSaturation, 1.0));
 
   vec2 pad = vec2(tris(seed * 34.0 + uTime * uSpeed / 10.0), tris(seed * 38.0 + uTime * uSpeed / 30.0)) - 0.5;
   float star = Star(gv - pad, flareSize);
@@ -136,7 +128,7 @@ void main() {
 
   for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
     float depth = fract(i + uStarSpeed * uSpeed);
-    float scale = mix(15.0 * uDensity, 0.5 * uDensity, depth); // Adjusted for visual density
+    float scale = mix(15.0 * uDensity, 0.5 * uDensity, depth);
     float fade = depth * smoothstep(1.0, 0.9, depth);
     col += StarLayer(uv * scale + i * 453.32) * fade;
   }
@@ -204,7 +196,8 @@ export default function HomeBg({
     let program;
 
     function resize() {
-      // MODIFICATION: Restored render scale to 1.0 for full resolution visuals.
+      // FIX: Restored render scale to 1.0 for full, native resolution.
+      // This will eliminate the "blocky" appearance.
       const scale = 1.0; 
       const dpr = Math.min(window.devicePixelRatio, 2);
       const canvasWidth = ctn.offsetWidth * dpr * scale;
