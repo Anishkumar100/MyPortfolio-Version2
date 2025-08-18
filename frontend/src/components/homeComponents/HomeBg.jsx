@@ -72,7 +72,6 @@ float Star(vec2 uv, float flare) {
   uv *= MAT45;
   rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
   m += rays * 0.3 * flare * uGlowIntensity;
-  // MODIFICATION: Softer falloff for a less pixelated glow
   m *= smoothstep(1.0, 0.1, d);
   return m;
 }
@@ -153,32 +152,6 @@ void main() {
 }
 `;
 
-// MODIFICATION: Slightly larger max star size
-class Pixel {
-  constructor(canvas, context, x, y, color, speed, delay) {
-    this.width = canvas.width;
-    this.height = canvas.height;
-    this.ctx = context;
-    this.x = x;
-    this.y = y;
-    this.color = color;
-    this.speed = this.getRandomValue(0.1, 0.9) * speed;
-    this.size = 0;
-    this.sizeStep = Math.random() * 0.4;
-    this.minSize = 0.5;
-    this.maxSizeInteger = 3; // Changed from 2 to 3
-    this.maxSize = this.getRandomValue(this.minSize, this.maxSizeInteger);
-    this.delay = delay;
-    this.counter = 0;
-    this.counterStep = Math.random() * 4 + (this.width + this.height) * 0.01;
-    this.isIdle = false;
-    this.isReverse = false;
-    this.isShimmer = false;
-  }
-  // ... rest of Pixel class is unchanged
-}
-
-
 export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
@@ -231,8 +204,8 @@ export default function HomeBg({
     let program;
 
     function resize() {
-      // MODIFICATION: Increased render scale for better visual quality
-      const scale = 0.75; 
+      // MODIFICATION: Restored render scale to 1.0 for full resolution visuals.
+      const scale = 1.0; 
       const dpr = Math.min(window.devicePixelRatio, 2);
       const canvasWidth = ctn.offsetWidth * dpr * scale;
       const canvasHeight = ctn.offsetHeight * dpr * scale;
