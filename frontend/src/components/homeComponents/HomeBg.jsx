@@ -182,6 +182,8 @@ export default function HomeBg({
   const smoothMousePos = useRef({ x: 0.5, y: 0.5 });
   const targetMouseActive = useRef(0.0);
   const smoothMouseActive = useRef(0.0);
+  // OPTIMIZATION: A ref to track if the animation should be running.
+  const isVisible = useRef(false);
 
   const memoizedFocal = useMemo(() => focal, [focal]);
   const memoizedRotation = useMemo(() => rotation, [rotation]);
@@ -266,8 +268,6 @@ export default function HomeBg({
     const mesh = new Mesh(gl, { geometry, program });
     let animateId;
     
-    // OPTIMIZATION: Throttling mouse move events.
-    // This ensures the mouse position is only updated once per animation frame.
     let mouseEventData = null;
     function handleMouseMove(e) {
         mouseEventData = e;
@@ -275,6 +275,9 @@ export default function HomeBg({
 
     function update(t) {
       animateId = requestAnimationFrame(update);
+      
+      // OPTIMIZATION: Only render the scene if the component is visible.
+      if (!isVisible.current) return;
 
       if(mouseEventData) {
         const rect = ctn.getBoundingClientRect();
@@ -312,6 +315,15 @@ export default function HomeBg({
       ctn.addEventListener("mousemove", handleMouseMove);
       ctn.addEventListener("mouseleave", handleMouseLeave);
     }
+    
+    // OPTIMIZATION: Set up the Intersection Observer to pause the animation when off-screen.
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            isVisible.current = entry.isIntersecting;
+        },
+        { threshold: 0 }
+    );
+    observer.observe(ctn);
 
     return () => {
       cancelAnimationFrame(animateId);
@@ -323,6 +335,7 @@ export default function HomeBg({
       if (ctn && gl.canvas) {
         ctn.removeChild(gl.canvas);
       }
+      observer.disconnect();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
