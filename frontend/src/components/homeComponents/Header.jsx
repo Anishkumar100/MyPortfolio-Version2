@@ -101,7 +101,7 @@ export const Header = () => {
            
           </p>
 
-          <p className="text-gray-400 text-sm sm:text-base md:text-lg max-w-3xl mx-auto leading-relaxed break-words">
+          <p className="text-gray-400 text-sm sm:text-base md:text-lg max-w-3xl mx-auto leading-relaxed break-words max-sm:text-justify">
             Proficient in the MERN stack, React, Node.js, and Tailwind CSS, I bring a comprehensive approach to both frontend and backend development, delivering robust solutions tailored to your needs.
           </p>
 
