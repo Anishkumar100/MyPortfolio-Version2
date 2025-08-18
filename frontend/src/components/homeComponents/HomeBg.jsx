@@ -33,8 +33,6 @@ uniform float uAutoCenterRepulsion;
 uniform bool uTransparent;
 varying vec2 vUv;
 
-// OPTIMIZATION: Reduced the number of layers from 4.0 to 3.0
-// This reduces the fragment shader calculations by 25%.
 #define NUM_LAYER 3.0
 #define STAR_COLOR_CUTOFF 0.2
 #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
@@ -163,16 +161,16 @@ export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
   starSpeed = 0.5,
-  density = 0.5,
+  density = 1,
   hueShift = 140,
   disableAnimation = false,
   speed = 1.0,
   mouseInteraction = true,
-  glowIntensity = 0.5,
-  saturation = 1,
+  glowIntensity = 0.3,
+  saturation = 0.6,
   mouseRepulsion = true,
-  repulsionStrength = 1,
-  twinkleIntensity = 0.6,
+  repulsionStrength = 2,
+  twinkleIntensity = 0.3,
   rotationSpeed = 0.2,
   autoCenterRepulsion = 0,
   transparent = false,
@@ -185,8 +183,6 @@ export default function HomeBg({
   const targetMouseActive = useRef(0.0);
   const smoothMouseActive = useRef(0.0);
 
-  // OPTIMIZATION: Memoize array props to prevent the useEffect from re-running unnecessarily.
-  // This is a crucial optimization to stop the WebGL context from being destroyed and recreated.
   const memoizedFocal = useMemo(() => focal, [focal]);
   const memoizedRotation = useMemo(() => rotation, [rotation]);
 
@@ -212,17 +208,13 @@ export default function HomeBg({
     let program;
 
     function resize() {
-      const scale = 0.5; // Render at 50% resolution
-      const dpr = Math.min(window.devicePixelRatio, 2); // Cap DPR at 2 for performance
-      
+      const scale = 0.5;
+      const dpr = Math.min(window.devicePixelRatio, 2);
       const canvasWidth = ctn.offsetWidth * dpr * scale;
       const canvasHeight = ctn.offsetHeight * dpr * scale;
-
       renderer.setSize(canvasWidth, canvasHeight);
-      
       gl.canvas.style.width = '100%';
       gl.canvas.style.height = '100%';
-
       if (program) {
         program.uniforms.uResolution.value = new Color(
           gl.canvas.width,
@@ -273,9 +265,26 @@ export default function HomeBg({
 
     const mesh = new Mesh(gl, { geometry, program });
     let animateId;
+    
+    // OPTIMIZATION: Throttling mouse move events.
+    // This ensures the mouse position is only updated once per animation frame.
+    let mouseEventData = null;
+    function handleMouseMove(e) {
+        mouseEventData = e;
+    }
 
     function update(t) {
       animateId = requestAnimationFrame(update);
+
+      if(mouseEventData) {
+        const rect = ctn.getBoundingClientRect();
+        const x = (mouseEventData.clientX - rect.left) / rect.width;
+        const y = 1.0 - (mouseEventData.clientY - rect.top) / rect.height;
+        targetMousePos.current = { x, y };
+        targetMouseActive.current = 1.0;
+        mouseEventData = null; // Reset after processing
+      }
+
       if (!disableAnimation) {
         program.uniforms.uTime.value = t * 0.001;
         program.uniforms.uStarSpeed.value = (t * 0.001 * starSpeed) / 10.0;
@@ -294,14 +303,6 @@ export default function HomeBg({
     }
     animateId = requestAnimationFrame(update);
     ctn.appendChild(gl.canvas);
-
-    function handleMouseMove(e) {
-      const rect = ctn.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = 1.0 - (e.clientY - rect.top) / rect.height;
-      targetMousePos.current = { x, y };
-      targetMouseActive.current = 1.0;
-    }
 
     function handleMouseLeave() {
       targetMouseActive.current = 0.0;
@@ -325,7 +326,6 @@ export default function HomeBg({
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
-    // MODIFICATION: Using the memoized values in the dependency array
     memoizedFocal,
     memoizedRotation,
     starSpeed,
