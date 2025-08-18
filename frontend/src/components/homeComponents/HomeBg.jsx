@@ -1,12 +1,10 @@
 import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 
 const vertexShader = `
 attribute vec2 uv;
 attribute vec2 position;
-
 varying vec2 vUv;
-
 void main() {
   vUv = uv;
   gl_Position = vec4(position, 0, 1);
@@ -15,7 +13,6 @@ void main() {
 
 const fragmentShader = `
 precision highp float;
-
 uniform float uTime;
 uniform vec3 uResolution;
 uniform vec2 uFocal;
@@ -34,10 +31,11 @@ uniform float uRepulsionStrength;
 uniform float uMouseActiveFactor;
 uniform float uAutoCenterRepulsion;
 uniform bool uTransparent;
-
 varying vec2 vUv;
 
-#define NUM_LAYER 4.0
+// OPTIMIZATION: Reduced the number of layers from 4.0 to 3.0
+// This reduces the fragment shader calculations by 25%.
+#define NUM_LAYER 3.0
 #define STAR_COLOR_CUTOFF 0.2
 #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
 #define PERIOD 3.0
@@ -82,7 +80,6 @@ float Star(vec2 uv, float flare) {
 
 vec3 StarLayer(vec2 uv) {
   vec3 col = vec3(0.0);
-
   vec2 gv = fract(uv) - 0.5; 
   vec2 id = floor(uv);
 
@@ -94,7 +91,7 @@ vec3 StarLayer(vec2 uv) {
       float size = fract(seed * 345.32);
       float glossLocal = tri(uStarSpeed / (PERIOD * seed + 1.0));
       float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
-
+      
       float red = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF;
       float blu = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
       float grn = min(red, blu) * seed;
@@ -107,29 +104,24 @@ vec3 StarLayer(vec2 uv) {
       base = hsv2rgb(vec3(hue, sat, val));
 
       vec2 pad = vec2(tris(seed * 34.0 + uTime * uSpeed / 10.0), tris(seed * 38.0 + uTime * uSpeed / 30.0)) - 0.5;
-
       float star = Star(gv - offset - pad, flareSize);
       vec3 color = base;
-
       float twinkle = trisn(uTime * uSpeed + seed * 6.2831) * 0.5 + 1.0;
       twinkle = mix(1.0, twinkle, uTwinkleIntensity);
       star *= twinkle;
-      
       col += star * size * color;
     }
   }
-
   return col;
 }
 
 void main() {
   vec2 focalPx = uFocal * uResolution.xy;
   vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
-
   vec2 mouseNorm = uMouse - vec2(0.5);
   
   if (uAutoCenterRepulsion > 0.0) {
-    vec2 centerUV = vec2(0.0, 0.0); // Center in UV space
+    vec2 centerUV = vec2(0.0, 0.0);
     float centerDist = length(uv - centerUV);
     vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1));
     uv += repulsion * 0.05;
@@ -146,9 +138,7 @@ void main() {
   float autoRotAngle = uTime * uRotationSpeed;
   mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle));
   uv = autoRot * uv;
-
   uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv;
-
   vec3 col = vec3(0.0);
 
   for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
@@ -160,8 +150,8 @@ void main() {
 
   if (uTransparent) {
     float alpha = length(col);
-    alpha = smoothstep(0.0, 0.3, alpha); // Enhance contrast
-    alpha = min(alpha, 1.0); // Clamp to maximum 1.0
+    alpha = smoothstep(0.0, 0.3, alpha);
+    alpha = min(alpha, 1.0);
     gl_FragColor = vec4(col, alpha);
   } else {
     gl_FragColor = vec4(col, 1.0);
@@ -172,20 +162,21 @@ void main() {
 export default function HomeBg({
   focal = [0.5, 0.5],
   rotation = [1.0, 0.0],
-  starSpeed = 0.5,
-  density = 1,
+  starSpeed = 0.7,
+  density = 0.6,
   hueShift = 140,
   disableAnimation = false,
   speed = 1.0,
   mouseInteraction = true,
-  glowIntensity = 0.3,
-  saturation = 0.6,
+  glowIntensity = 0.6,
+  saturation = 1,
   mouseRepulsion = true,
-  repulsionStrength = 2,
-  twinkleIntensity = 0.3,
-  rotationSpeed = 0.2,
+  repulsionStrength = 1,
+  twinkleIntensity = 0.6,
+  rotationSpeed = 0.3,
   autoCenterRepulsion = 0,
-  transparent = true,
+  transparent = false,
+  backgroundColor = '#000000',
   ...rest
 }) {
   const ctnDom = useRef(null);
@@ -202,20 +193,33 @@ export default function HomeBg({
       premultipliedAlpha: false,
     });
     const gl = renderer.gl;
-
+    
+    const color = new Color(backgroundColor);
+    
     if (transparent) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.clearColor(0, 0, 0, 0);
     } else {
-      gl.clearColor(0, 0, 0, 1);
+      gl.clearColor(color.r, color.g, color.b, 1);
     }
 
     let program;
 
+    // OPTIMIZATION: This function now renders the canvas at a lower resolution
+    // and lets CSS scale it up. This is the most effective performance boost.
     function resize() {
-      const scale = 1;
-      renderer.setSize(ctn.offsetWidth * scale, ctn.offsetHeight * scale);
+      const scale = 0.5; // Render at 50% resolution
+      const dpr = Math.min(window.devicePixelRatio, 2); // Cap DPR at 2 for performance
+      
+      const canvasWidth = ctn.offsetWidth * dpr * scale;
+      const canvasHeight = ctn.offsetHeight * dpr * scale;
+
+      renderer.setSize(canvasWidth, canvasHeight);
+      
+      gl.canvas.style.width = '100%';
+      gl.canvas.style.height = '100%';
+
       if (program) {
         program.uniforms.uResolution.value = new Color(
           gl.canvas.width,
@@ -275,13 +279,9 @@ export default function HomeBg({
       }
 
       const lerpFactor = 0.05;
-      smoothMousePos.current.x +=
-        (targetMousePos.current.x - smoothMousePos.current.x) * lerpFactor;
-      smoothMousePos.current.y +=
-        (targetMousePos.current.y - smoothMousePos.current.y) * lerpFactor;
-
-      smoothMouseActive.current +=
-        (targetMouseActive.current - smoothMouseActive.current) * lerpFactor;
+      smoothMousePos.current.x += (targetMousePos.current.x - smoothMousePos.current.x) * lerpFactor;
+      smoothMousePos.current.y += (targetMousePos.current.y - smoothMousePos.current.y) * lerpFactor;
+      smoothMouseActive.current += (targetMouseActive.current - smoothMouseActive.current) * lerpFactor;
 
       program.uniforms.uMouse.value[0] = smoothMousePos.current.x;
       program.uniforms.uMouse.value[1] = smoothMousePos.current.y;
@@ -316,7 +316,9 @@ export default function HomeBg({
         ctn.removeEventListener("mousemove", handleMouseMove);
         ctn.removeEventListener("mouseleave", handleMouseLeave);
       }
-      ctn.removeChild(gl.canvas);
+      if (ctn && gl.canvas) {
+        ctn.removeChild(gl.canvas);
+      }
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
@@ -336,7 +338,8 @@ export default function HomeBg({
     repulsionStrength,
     autoCenterRepulsion,
     transparent,
+    backgroundColor,
   ]);
 
-return <div ref={ctnDom} className="w-full min-h-screen relative " {...rest} />;
+  return <div ref={ctnDom} className="w-full min-h-screen relative " {...rest} />;
 }
