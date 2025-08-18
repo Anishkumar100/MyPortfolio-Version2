@@ -9,7 +9,7 @@ export const Projects = () => {
 
     useEffect(() => {
         // This GROQ query fetches all documents of type "project"
-        const query = '*[_type == "project"]';
+        const query = '*[_type == "project"] | order(_createdAt desc)';
 
         client.fetch(query).then((data) => {
             setProjects(data);
@@ -17,13 +17,13 @@ export const Projects = () => {
     }, []);
 
     return (
-        <main className="relative h-screen overflow-auto bg-[#111827]">
+        <main className="relative overflow-auto min-h-screen w-full p-4 sm:p-8">
             <div className="relative max-w-full mx-auto my-10 sm:my-10 z-10 border-b-2 border-indigo-500/20">
-                   <h1 className="text-5xl sm:text-7xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-500 px-4 py-4 leading-tight">
-                        My Projects
-                    </h1>
+                       <h1 className="text-5xl sm:text-7xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-500 px-4 py-4 leading-tight">
+                            My Projects
+                       </h1>
 
-                </div>
+                   </div>
             {/* Optional: Add a background like in your other pages */}
             <div className="fixed top-0 bottom-0 inset-0 h-screen z-0 w-full ">
                 <Silk
@@ -32,18 +32,20 @@ export const Projects = () => {
                     color="#221545"
                     noiseIntensity={0.2}
                     rotation={0}
-                />            
+                />              
             </div>
 
             {/* Main container for all project cards */}
-            <div className="relative  flex-row z-10 flex flex-wrap justify-center items-start gap-10">
+            <div className="relative flex-row z-10 flex flex-wrap justify-center items-start gap-10">
 
                 {/* We map over the 'projects' state to create a card for each project */}
                 {projects && projects.map((project, index) => (
                     // This is the container for each individual project card, styled like your example.
                     <div  onClick={()=>navigate(`/project/${project._id}`)}
                         key={index}
-                        className='flex flex-col items-center gap-4 p-4 bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl w-full max-w-[400px]'
+                        // MODIFICATION: The classes here now control the responsive layout.
+                        // w-full for mobile (1 card), lg:w-[calc(50%-1.25rem)] for desktop (2 cards).
+                        className='flex flex-col items-center gap-4 p-4 bg-gray-800/50 backdrop-blur-md border border-gray-700/50 rounded-xl w-full lg:w-[calc(50%-1.25rem)]'
                     >
                         <TiltedCard
                             // Use urlFor to get the correct image URL from Sanity's image data
