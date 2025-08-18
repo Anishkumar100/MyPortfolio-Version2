@@ -91,8 +91,8 @@ export const Header = () => {
           <p className="text-gray-400 text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed break-words max-sm:text-justify">
             <DecryptedText
               text="I specialize in developing high-quality, scalable web applications that combine elegant design with optimal performance. My focus is on creating intuitive, responsive experiences that engage users across devices."
-              speed={800}
-              maxIterations={10}
+              speed={1000}
+              maxIterations={3}
               characters="ABCD1234!?"
               className="revealed"
               parentClassName="all-letters"
