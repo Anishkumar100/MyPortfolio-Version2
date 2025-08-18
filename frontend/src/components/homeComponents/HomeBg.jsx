@@ -64,17 +64,29 @@ vec3 hsv2rgb(vec3 c) {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-float Star(vec2 uv, float flare) {
-  float d = length(uv);
-  float m = (0.05 * uGlowIntensity) / d;
-  float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-  m += rays * flare * uGlowIntensity;
-  uv *= MAT45;
-  rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-  m += rays * 0.3 * flare * uGlowIntensity;
-  m *= smoothstep(1.0, 0.1, d);
-  return m;
+// FINAL FIX: This function has been completely rewritten to draw a more realistic star shape.
+// It combines a soft circular core with a classic starburst ray pattern.
+float Star(vec2 uv, float flare, float size) {
+    float d = length(uv);
+    float star_size = size * 0.05;
+
+    // A soft, circular core for the star
+    float core = smoothstep(star_size, star_size * 0.8, d);
+
+    // Create a starburst pattern for the rays
+    float angle = atan(uv.y, uv.x);
+    float rays = sin(angle * 4.0) * 0.5 + 0.5; // 4 points for the star
+    rays = pow(rays, 20.0);
+    
+    // Combine the rays with a radial falloff
+    float starburst = rays * smoothstep(star_size * 3.0, 0.0, d) * flare * uGlowIntensity;
+
+    // A softer, wider glow behind the star
+    float glow = smoothstep(star_size * 6.0, 0.0, d) * 0.15 * uGlowIntensity;
+
+    return core + starburst + glow;
 }
+
 
 vec3 StarLayer(vec2 uv) {
   vec3 col = vec3(0.0);
@@ -90,12 +102,12 @@ vec3 StarLayer(vec2 uv) {
   vec3 base = hsv2rgb(vec3(hue, uSaturation, 1.0));
 
   vec2 pad = vec2(tris(seed * 34.0 + uTime * uSpeed / 10.0), tris(seed * 38.0 + uTime * uSpeed / 30.0)) - 0.5;
-  float star = Star(gv - pad, flareSize);
+  float star = Star(gv - pad, flareSize, size); // Pass size to the Star function
   vec3 color = base;
   float twinkle = trisn(uTime * uSpeed + seed * 6.2831) * 0.5 + 1.0;
   twinkle = mix(1.0, twinkle, uTwinkleIntensity);
   star *= twinkle;
-  col += star * size * color;
+  col += star * color; // Removed size multiplication here as it's handled in Star
 
   return col;
 }
@@ -196,8 +208,6 @@ export default function HomeBg({
     let program;
 
     function resize() {
-      // FIX: Restored render scale to 1.0 for full, native resolution.
-      // This will eliminate the "blocky" appearance.
       const scale = 1.0; 
       const dpr = Math.min(window.devicePixelRatio, 2);
       const canvasWidth = ctn.offsetWidth * dpr * scale;
