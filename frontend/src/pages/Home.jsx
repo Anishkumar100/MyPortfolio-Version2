@@ -13,11 +13,12 @@ export const Home = () => {
         {/* Background */}
         <div className=' absolute inset-0 h-screen z-0'>
           <HomeBg
-            hue={220}
-            xOffset={0}
-            speed={1}
-            intensity={1}
-            size={1} />
+            mouseRepulsion={true}
+            mouseInteraction={true}
+            density={1.5}
+            glowIntensity={0.5}
+            saturation={0.8}
+            hueShift={240} />
         </div>
 
         {/* Foreground (Header) */}
