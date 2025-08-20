@@ -1,27 +1,35 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import HomeBg from '../components/homeComponents/HomeBg'
 import { Header } from '../components/indexComponents'
 
+
 export const Home = () => {
+
+
   return (
     <>
-    <main className='relative h-screen overflow-auto bg-[#111827] '>
-      
-      {/* Background */}
-      <div className=' absolute inset-0 h-screen z-0'>
-        <HomeBg />
-      </div>
+      <main className='relative h-screen overflow-auto bg-[#111827] '>
 
-         {/* Foreground (Header) */}
-      <div >
-        <Header />
-        <br/>
-      </div>
+        {/* Background */}
+        <div className=' absolute inset-0 h-screen z-0'>
+          <HomeBg
+            hue={220}
+            xOffset={0}
+            speed={1}
+            intensity={1}
+            size={1} />
+        </div>
 
-    </main>
+        {/* Foreground (Header) */}
+        <div >
+          <Header />
+          <br />
+        </div>
 
-   
-      
-   </>
+      </main>
+
+
+
+    </>
   )
 }
