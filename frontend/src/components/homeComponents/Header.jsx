@@ -37,7 +37,7 @@ export const Header = () => {
         style={{ left: "auto" }}
       >
         {/* Gradient overlay */}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/80 via-transparent to-black/90" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/80 via-transparent to-black/90 max-sm:bg-transparent" />
 
         {/* Main content container */}
         <div className="max-w-4xl flex-col justify-center items-start flex-wrap space-y-6 sm:space-y-8 w-full min-w-0">
