@@ -5,7 +5,7 @@ import { Header } from '../components/indexComponents'
 export const Home = () => {
   return (
     <>
-    <main className='relative h-screen overflow-auto bg-[#111827] flex justify-center items-center  '>
+    <main className='relative h-screen overflow-auto bg-[#111827] '>
       
       {/* Background */}
       <div className=' absolute inset-0 h-screen z-0'>

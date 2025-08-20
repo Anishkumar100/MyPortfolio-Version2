@@ -31,7 +31,7 @@ export const Header = () => {
     w-full max-w-4xl
     mx-auto top-28 mb-10  max-sm:top-20 flex flex-col items-center justify-center
     px-4 sm:px-6 md:px-8 lg:px-12
-    text-center text-white 
+    text-center text-white  flex-wrap
   
   "
         style={{ left: "auto" }}
@@ -40,7 +40,7 @@ export const Header = () => {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/80 via-transparent to-black/90" />
 
         {/* Main content container */}
-        <div className="max-w-4xl space-y-6 sm:space-y-8 w-full min-w-0">
+        <div className="max-w-4xl flex-col justify-center items-start flex-wrap space-y-6 sm:space-y-8 w-full min-w-0">
           {/* Intro */}
           <h1
             className="
