@@ -30,7 +30,7 @@ const createDesktopFragmentShader = (precision = 'highp') => `
     void main() { vec2 focalPx = uFocal * uResolution.xy; vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y; if (uAutoCenterRepulsion > 0.0) { vec2 centerUV = vec2(0.0); float centerDist = length(uv - centerUV); vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1)); uv += repulsion * 0.05; } else if (uMouseRepulsion) { vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y; float mouseDist = length(uv - mousePosUV); vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1)); uv += repulsion * 0.05 * uMouseActiveFactor; } else { vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor; uv += mouseOffset; } float autoRotAngle = uTime * uRotationSpeed; mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle)); uv = autoRot * uv; uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv; vec3 col = vec3(0.0); for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) { float depth = fract(i + uStarSpeed * uSpeed); float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth); float fade = depth * smoothstep(1.0, 0.9, depth); col += StarLayer(uv * scale + i * 453.32) * fade; } if (uTransparent) { float alpha = length(col); alpha = smoothstep(0.0, 0.3, alpha); gl_FragColor = vec4(col, min(alpha, 1.0)); } else { gl_FragColor = vec4(col, 1.0); } }
 `;
 
-// Mobile shader with visual tweaks for brightness
+// Mobile shader with final bug fixes for visibility
 const createMobileFragmentShader = (precision = 'mediump') => `
     precision ${precision} float;
     uniform float uTime; uniform vec3 uResolution; uniform vec2 uFocal; uniform vec2 uRotation; uniform float uStarSpeed; uniform float uDensity; uniform float uSpeed; uniform vec2 uMouse; uniform float uGlowIntensity; uniform float uTwinkleIntensity; uniform float uRotationSpeed; uniform bool uTransparent; uniform bool uMouseRepulsion; uniform float uRepulsionStrength; uniform float uMouseActiveFactor; uniform float uAutoCenterRepulsion;
@@ -45,11 +45,11 @@ const createMobileFragmentShader = (precision = 'mediump') => `
         return fract(p.x * p.y);
     }
     
-    // ✨ VISUAL TWEAK 1: Brighter star with a softer falloff
+    // ✨ FIX 1: This Star function is now 100% safe for all GPUs.
+    // The previous smoothstep(0.8, 0.0, d) was invalid. This is the correct way.
     float Star(vec2 uv) {
         float d = length(uv);
-        // Using smoothstep creates a softer, more visible core
-        return smoothstep(0.8, 0.0, d);
+        return 1.0 - smoothstep(0.0, 0.8, d);
     }
     
     vec3 StarLayer(vec2 uv) {
@@ -60,9 +60,9 @@ const createMobileFragmentShader = (precision = 'mediump') => `
         float seed = Hash21(id);
         float size = fract(seed * 345.32);
 
-        if (size > 0.15) { // Slightly increased threshold to reduce clutter
-            // ✨ VISUAL TWEAK 2: Apply size modification correctly
-            float star = Star(gv / size);
+        if (size > 0.1) {
+            // ✨ FIX 2: Added max() to prevent division by zero if size is exactly 0.
+            float star = Star(gv / max(size, 0.001));
             
             float color_seed = fract(seed * 123.45);
             vec3 base_color = vec3(color_seed * 0.8 + 0.2, color_seed * 0.9 + 0.1, 1.0);
