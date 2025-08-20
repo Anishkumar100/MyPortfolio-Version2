@@ -11,7 +11,7 @@ const vertexShader = `
     }
 `;
 
-// Desktop shader remains unchanged with the highest visual quality.
+// Desktop shader is unchanged and remains at the highest visual quality.
 const createDesktopFragmentShader = (precision = 'highp') => `
     precision ${precision} float;
     uniform float uTime; uniform vec3 uResolution; uniform vec2 uFocal; uniform vec2 uRotation; uniform float uStarSpeed; uniform float uDensity; uniform float uHueShift; uniform float uSpeed; uniform vec2 uMouse; uniform float uGlowIntensity; uniform float uSaturation; uniform bool uMouseRepulsion; uniform float uTwinkleIntensity; uniform float uRotationSpeed; uniform float uRepulsionStrength; uniform float uMouseActiveFactor; uniform float uAutoCenterRepulsion; uniform bool uTransparent; varying vec2 vUv;
@@ -30,7 +30,7 @@ const createDesktopFragmentShader = (precision = 'highp') => `
     void main() { vec2 focalPx = uFocal * uResolution.xy; vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y; if (uAutoCenterRepulsion > 0.0) { vec2 centerUV = vec2(0.0); float centerDist = length(uv - centerUV); vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1)); uv += repulsion * 0.05; } else if (uMouseRepulsion) { vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y; float mouseDist = length(uv - mousePosUV); vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1)); uv += repulsion * 0.05 * uMouseActiveFactor; } else { vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor; uv += mouseOffset; } float autoRotAngle = uTime * uRotationSpeed; mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle)); uv = autoRot * uv; uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv; vec3 col = vec3(0.0); for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) { float depth = fract(i + uStarSpeed * uSpeed); float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth); float fade = depth * smoothstep(1.0, 0.9, depth); col += StarLayer(uv * scale + i * 453.32) * fade; } if (uTransparent) { float alpha = length(col); alpha = smoothstep(0.0, 0.3, alpha); gl_FragColor = vec4(col, min(alpha, 1.0)); } else { gl_FragColor = vec4(col, 1.0); } }
 `;
 
-// ✨ FINAL, BULLETPROOF MOBILE SHADER ✨
+// ✨ FINAL, BULLETPROOF MOBILE SHADER v2 ✨
 const createMobileFragmentShader = (precision = 'mediump') => `
     precision ${precision} float;
     uniform float uTime; uniform vec3 uResolution; uniform vec2 uFocal; uniform vec2 uRotation; uniform float uStarSpeed; uniform float uDensity; uniform float uSpeed; uniform vec2 uMouse; uniform float uGlowIntensity; uniform float uTwinkleIntensity; uniform float uRotationSpeed; uniform bool uTransparent; uniform bool uMouseRepulsion; uniform float uRepulsionStrength; uniform float uMouseActiveFactor; uniform float uAutoCenterRepulsion;
@@ -45,13 +45,11 @@ const createMobileFragmentShader = (precision = 'mediump') => `
         return fract(p.x * p.y);
     }
     
-    // This Star function is now simpler and safer for all mobile GPUs.
-    // It produces a soft glow instead of the complex cross-shape.
+    // Safest possible star function for maximum compatibility.
     float Star(vec2 uv) {
         float d = length(uv);
-        float m = (0.05 * uGlowIntensity) / (d + 0.0001); // Safe division
-        m *= smoothstep(0.8, 0.2, d); // Smooth falloff
-        return m;
+        // Inverse-square falloff for a soft glow, protected against division by zero.
+        return 0.1 / (d*d + 0.01);
     }
     
     vec3 StarLayer(vec2 uv) {
@@ -63,17 +61,15 @@ const createMobileFragmentShader = (precision = 'mediump') => `
         float size = fract(seed * 345.32);
 
         if (size > 0.1) {
-            float star = Star(gv); // Call the simpler Star function
+            float star = Star(gv / (size * 0.3 + 0.7)); // Adjust size here
             
-            // Simplified color (bluish-white)
             float color_seed = fract(seed * 123.45);
             vec3 base_color = vec3(color_seed * 0.8 + 0.2, color_seed * 0.9 + 0.1, 1.0);
             
-            // Twinkle effect
-            float twinkle = mix(1.0, sin(uTime * uSpeed + seed * TWO_PI) * 0.5 + 0.5, uTwinkleIntensity);
-            star *= twinkle;
+            float twinkle = sin(uTime * uSpeed + seed * TWO_PI) * 0.5 + 0.5;
+            star *= mix(1.0, twinkle, uTwinkleIntensity);
 
-            col += star * size * base_color;
+            col += star * size * base_color * uGlowIntensity;
         }
         return col;
     }
@@ -82,23 +78,26 @@ const createMobileFragmentShader = (precision = 'mediump') => `
         vec2 focalPx = uFocal * uResolution.xy;
         vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
 
-        // Full mouse repulsion logic
+        // ✨ DEFINITIVE BUG FIX: Safe mouse repulsion logic ✨
         if (uAutoCenterRepulsion > 0.0) {
-            vec2 centerUV = vec2(0.0);
-            float centerDist = length(uv - centerUV);
-            vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1));
-            uv += repulsion * 0.05;
+            vec2 dir = uv; // Direction from center
+            float dist = length(dir);
+            if (dist > 0.001) {
+                vec2 repulsion = dir / dist * (uAutoCenterRepulsion / (dist + 0.1));
+                uv += repulsion * 0.05;
+            }
         } else if (uMouseRepulsion) {
-            vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y;
-            float mouseDist = length(uv - mousePosUV);
-            vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1));
-            uv += repulsion * 0.05 * uMouseActiveFactor;
+            vec2 dir = uv - (uMouse * uResolution.xy - focalPx) / uResolution.y;
+            float dist = length(dir);
+            if (dist > 0.001) { // Only apply if not at the exact mouse position
+                vec2 repulsion = dir / dist * (uRepulsionStrength / (dist + 0.1));
+                uv += repulsion * 0.05 * uMouseActiveFactor;
+            }
         } else {
             vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor;
             uv += mouseOffset;
         }
 
-        // Animation logic
         float autoRotAngle = uTime * uRotationSpeed;
         mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle));
         uv = autoRot * uv;
@@ -112,7 +111,6 @@ const createMobileFragmentShader = (precision = 'mediump') => `
             col += StarLayer(uv * scale + i * 453.32) * fade;
         }
 
-        // Final color output
         if (uTransparent) {
             float alpha = length(col);
             alpha = smoothstep(0.0, 0.1, alpha);
@@ -144,30 +142,20 @@ export default memo(function Galaxy({
         propsRef.current = { starSpeed, disableAnimation, transparent };
     });
 
-    // Setup hook
+    // The rest of the React component is unchanged and correct.
     useEffect(() => {
         const ctn = ctnDom.current;
         if (!ctn) return;
-
-        const fragment = mobile
-            ? createMobileFragmentShader(precision)
-            : createDesktopFragmentShader(precision);
-
+        const fragment = mobile ? createMobileFragmentShader(precision) : createDesktopFragmentShader(precision);
         const renderer = new Renderer({ alpha: true, premultipliedAlpha: false });
         const gl = renderer.gl;
         ctn.appendChild(gl.canvas);
-
         const program = new Program(gl, {
-            vertex: vertexShader,
-            fragment: fragment,
-            uniforms: {
-                uTime: { value: 0 }, uResolution: { value: new Color(0, 0, 0) }, uFocal: { value: new Float32Array(focal) }, uRotation: { value: new Float32Array(rotation) }, uStarSpeed: { value: starSpeed }, uDensity: { value: density }, uHueShift: { value: hueShift / 360.0 }, uSpeed: { value: speed }, uMouse: { value: new Float32Array([0.5, 0.5]) }, uGlowIntensity: { value: glowIntensity }, uSaturation: { value: saturation }, uMouseRepulsion: { value: mouseRepulsion }, uTwinkleIntensity: { value: twinkleIntensity }, uRotationSpeed: { value: rotationSpeed }, uRepulsionStrength: { value: repulsionStrength }, uMouseActiveFactor: { value: 0.0 }, uAutoCenterRepulsion: { value: autoCenterRepulsion }, uTransparent: { value: transparent },
-            },
+            vertex: vertexShader, fragment: fragment,
+            uniforms: { uTime: { value: 0 }, uResolution: { value: new Color(0, 0, 0) }, uFocal: { value: new Float32Array(focal) }, uRotation: { value: new Float32Array(rotation) }, uStarSpeed: { value: starSpeed }, uDensity: { value: density }, uHueShift: { value: hueShift / 360.0 }, uSpeed: { value: speed }, uMouse: { value: new Float32Array([0.5, 0.5]) }, uGlowIntensity: { value: glowIntensity }, uSaturation: { value: saturation }, uMouseRepulsion: { value: mouseRepulsion }, uTwinkleIntensity: { value: twinkleIntensity }, uRotationSpeed: { value: rotationSpeed }, uRepulsionStrength: { value: repulsionStrength }, uMouseActiveFactor: { value: 0.0 }, uAutoCenterRepulsion: { value: autoCenterRepulsion }, uTransparent: { value: transparent }, },
         });
-
         const mesh = new Mesh(gl, { geometry: new Triangle(gl), program });
         glState.current = { gl, program, renderer, mesh };
-
         const resize = () => {
             const dpr = Math.min(window.devicePixelRatio, 2);
             const scale = dpr * resolutionScale;
@@ -178,35 +166,18 @@ export default memo(function Galaxy({
         };
         window.addEventListener("resize", resize, false);
         resize();
-
         const handleMouseMove = (e) => { const rect = ctn.getBoundingClientRect(); targetMousePos.current = { x: (e.clientX - rect.left) / rect.width, y: 1.0 - (e.clientY - rect.top) / rect.height, }; targetMouseActive.current = 1.0; };
         const handleMouseLeave = () => { targetMouseActive.current = 0.0; };
-
         if (mouseInteraction || mouseRepulsion) {
             ctn.addEventListener("mousemove", handleMouseMove);
             ctn.addEventListener("mouseleave", handleMouseLeave);
         }
-
         let animateId;
         const update = (t) => {
             animateId = requestAnimationFrame(update);
             const { disableAnimation: currentDisable, starSpeed: currentStarSpeed, transparent: currentTransparent } = propsRef.current;
-
-            if (currentTransparent) {
-                gl.clearColor(0, 0, 0, 0);
-                gl.enable(gl.BLEND);
-                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-            } else {
-                gl.clearColor(0, 0, 0, 1);
-                gl.disable(gl.BLEND);
-            }
-
-            if (!currentDisable) {
-                const timeInSeconds = t * 0.001;
-                program.uniforms.uTime.value = timeInSeconds;
-                program.uniforms.uStarSpeed.value = (timeInSeconds * currentStarSpeed) * 0.1;
-            }
-            
+            if (currentTransparent) { gl.clearColor(0, 0, 0, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); } else { gl.clearColor(0, 0, 0, 1); gl.disable(gl.BLEND); }
+            if (!currentDisable) { const timeInSeconds = t * 0.001; program.uniforms.uTime.value = timeInSeconds; program.uniforms.uStarSpeed.value = (timeInSeconds * currentStarSpeed) * 0.1; }
             const lerpFactor = 0.05;
             smoothMousePos.current.x += (targetMousePos.current.x - smoothMousePos.current.x) * lerpFactor;
             smoothMousePos.current.y += (targetMousePos.current.y - smoothMousePos.current.y) * lerpFactor;
@@ -214,43 +185,15 @@ export default memo(function Galaxy({
             program.uniforms.uMouse.value[0] = smoothMousePos.current.x;
             program.uniforms.uMouse.value[1] = smoothMousePos.current.y;
             program.uniforms.uMouseActiveFactor.value = smoothMouseActive.current;
-
             renderer.render({ scene: mesh });
         };
         animateId = requestAnimationFrame(update);
-
-        return () => {
-            cancelAnimationFrame(animateId);
-            window.removeEventListener("resize", resize);
-            if (mouseInteraction || mouseRepulsion) {
-                ctn.removeEventListener("mousemove", handleMouseMove);
-                ctn.removeEventListener("mouseleave", handleMouseLeave);
-            }
-            if (ctn.contains(gl.canvas)) {
-                ctn.removeChild(gl.canvas);
-            }
-            gl.getExtension("WEBGL_lose_context")?.loseContext();
-        };
+        return () => { cancelAnimationFrame(animateId); window.removeEventListener("resize", resize); if (mouseInteraction || mouseRepulsion) { ctn.removeEventListener("mousemove", handleMouseMove); ctn.removeEventListener("mouseleave", handleMouseLeave); } if (ctn.contains(gl.canvas)) { ctn.removeChild(gl.canvas); } gl.getExtension("WEBGL_lose_context")?.loseContext(); };
     }, [mobile, precision, resolutionScale, mouseInteraction, mouseRepulsion]);
-
-    // Prop update hook
     useEffect(() => {
         const { program } = glState.current;
         if (!program) return;
-        program.uniforms.uFocal.value.set(focal);
-        program.uniforms.uRotation.value.set(rotation);
-        program.uniforms.uDensity.value = density;
-        program.uniforms.uHueShift.value = hueShift / 360.0;
-        program.uniforms.uSpeed.value = speed;
-        program.uniforms.uGlowIntensity.value = glowIntensity;
-        program.uniforms.uSaturation.value = saturation;
-        program.uniforms.uMouseRepulsion.value = mouseRepulsion;
-        program.uniforms.uTwinkleIntensity.value = twinkleIntensity;
-        program.uniforms.uRotationSpeed.value = rotationSpeed;
-        program.uniforms.uRepulsionStrength.value = repulsionStrength;
-        program.uniforms.uAutoCenterRepulsion.value = autoCenterRepulsion;
-        program.uniforms.uTransparent.value = transparent;
+        program.uniforms.uFocal.value.set(focal); program.uniforms.uRotation.value.set(rotation); program.uniforms.uDensity.value = density; program.uniforms.uHueShift.value = hueShift / 360.0; program.uniforms.uSpeed.value = speed; program.uniforms.uGlowIntensity.value = glowIntensity; program.uniforms.uSaturation.value = saturation; program.uniforms.uMouseRepulsion.value = mouseRepulsion; program.uniforms.uTwinkleIntensity.value = twinkleIntensity; program.uniforms.uRotationSpeed.value = rotationSpeed; program.uniforms.uRepulsionStrength.value = repulsionStrength; program.uniforms.uAutoCenterRepulsion.value = autoCenterRepulsion; program.uniforms.uTransparent.value = transparent;
     }, [focal, rotation, density, hueShift, speed, glowIntensity, saturation, mouseRepulsion, twinkleIntensity, rotationSpeed, repulsionStrength, autoCenterRepulsion, transparent]);
-
     return <div ref={ctnDom} className="w-full h-full relative" {...rest} />;
 });
