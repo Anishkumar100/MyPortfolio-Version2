@@ -11,201 +11,70 @@ const vertexShader = `
     }
 `;
 
-const createFragmentShader = (precision = 'highp') => `
+// This is the full-quality, visually complex shader for desktops.
+const createDesktopFragmentShader = (precision = 'highp') => `
     precision ${precision} float;
-
-    uniform float uTime;
-    uniform vec3 uResolution;
-    uniform vec2 uFocal;
-    uniform vec2 uRotation;
-    uniform float uStarSpeed;
-    uniform float uDensity;
-    uniform float uHueShift;
-    uniform float uSpeed;
-    uniform vec2 uMouse;
-    uniform float uGlowIntensity;
-    uniform float uSaturation;
-    uniform bool uMouseRepulsion;
-    uniform float uTwinkleIntensity;
-    uniform float uRotationSpeed;
-    uniform float uRepulsionStrength;
-    uniform float uMouseActiveFactor;
-    uniform float uAutoCenterRepulsion;
-    uniform bool uTransparent;
-
-    varying vec2 vUv;
-
+    uniform float uTime; uniform vec3 uResolution; uniform vec2 uFocal; uniform vec2 uRotation; uniform float uStarSpeed; uniform float uDensity; uniform float uHueShift; uniform float uSpeed; uniform vec2 uMouse; uniform float uGlowIntensity; uniform float uSaturation; uniform bool uMouseRepulsion; uniform float uTwinkleIntensity; uniform float uRotationSpeed; uniform float uRepulsionStrength; uniform float uMouseActiveFactor; uniform float uAutoCenterRepulsion; uniform bool uTransparent; varying vec2 vUv;
     #define NUM_LAYER 4.0
     #define STAR_COLOR_CUTOFF 0.2
     #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
     #define PERIOD 3.0
     #define PI 3.14159265359
     #define TWO_PI 6.28318530718
+    float Hash21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float tris(float x) { return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * fract(x) - 1.0)); }
+    float trisn(float x) { return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * fract(x) - 1.0))) - 1.0; }
+    vec3 hsv2rgb(vec3 c) { vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0); vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }
+    float Star(vec2 uv, float flare) { float d = length(uv); float m = (0.05 * uGlowIntensity) / (d + 0.0001); float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0)); m += rays * flare * uGlowIntensity; uv *= MAT45; rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0)); m += rays * 0.3 * flare * uGlowIntensity; m *= smoothstep(1.0, 0.2, d); return m; }
+    vec3 StarLayer(vec2 uv) { vec3 col = vec3(0.0); vec2 gv = fract(uv) - 0.5; vec2 id = floor(uv); float timeAndSpeed = uTime * uSpeed; for (int y = -1; y <= 1; y++) { for (int x = -1; x <= 1; x++) { vec2 offset = vec2(float(x), float(y)); if (length(gv - offset) > 1.414) continue; vec2 si = id + offset; float seed = Hash21(si); float size = fract(seed * 345.32); float invPeriod = 1.0 / (PERIOD * seed + 1.0); float glossLocal = abs(fract(uStarSpeed * invPeriod) * 2.0 - 1.0); float flareSize = smoothstep(0.9, 1.0, size) * glossLocal; vec3 base; base.r = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF; base.b = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF; base.g = min(base.r, base.b) * seed; float hue = atan(base.g - base.r, base.b - base.r) / TWO_PI + 0.5; hue = fract(hue + uHueShift); float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation; float val = max(max(base.r, base.g), base.b); base = hsv2rgb(vec3(hue, sat, val)); vec2 pad = vec2(tris(seed * 34.0 + timeAndSpeed * 0.1), tris(seed * 38.0 + timeAndSpeed * 0.0333)) - 0.5; float star = Star(gv - offset - pad, flareSize); float twinkle = mix(1.0, trisn(timeAndSpeed + seed * TWO_PI) * 0.5 + 1.0, uTwinkleIntensity); star *= twinkle; col += star * size * base; } } return col; }
+    void main() { vec2 focalPx = uFocal * uResolution.xy; vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y; if (uAutoCenterRepulsion > 0.0) { vec2 centerUV = vec2(0.0); float centerDist = length(uv - centerUV); vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1)); uv += repulsion * 0.05; } else if (uMouseRepulsion) { vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y; float mouseDist = length(uv - mousePosUV); vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1)); uv += repulsion * 0.05 * uMouseActiveFactor; } else { vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor; uv += mouseOffset; } float autoRotAngle = uTime * uRotationSpeed; mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle)); uv = autoRot * uv; uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv; vec3 col = vec3(0.0); for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) { float depth = fract(i + uStarSpeed * uSpeed); float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth); float fade = depth * smoothstep(1.0, 0.9, depth); col += StarLayer(uv * scale + i * 453.32) * fade; } if (uTransparent) { float alpha = length(col); alpha = smoothstep(0.0, 0.3, alpha); gl_FragColor = vec4(col, min(alpha, 1.0)); } else { gl_FragColor = vec4(col, 1.0); } }
+`;
 
-    float Hash21(vec2 p) {
-        p = fract(p * vec2(123.34, 456.21));
-        p += dot(p, p + 45.32);
-        return fract(p.x * p.y);
-    }
-
-    float tris(float x) {
-        return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * fract(x) - 1.0));
-    }
-
-    float trisn(float x) {
-        return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * fract(x) - 1.0))) - 1.0;
-    }
-
-    vec3 hsv2rgb(vec3 c) {
-        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-    }
-
-    float Star(vec2 uv, float flare) {
-        float d = length(uv);
-        // Bug Fix: Prevent division by zero
-        float m = (0.05 * uGlowIntensity) / (d + 0.0001);
-        float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-        m += rays * flare * uGlowIntensity;
-        uv *= MAT45;
-        rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-        m += rays * 0.3 * flare * uGlowIntensity;
-        m *= smoothstep(1.0, 0.2, d);
-        return m;
-    }
-
-    vec3 StarLayer(vec2 uv) {
-        vec3 col = vec3(0.0);
-        vec2 gv = fract(uv) - 0.5;
-        vec2 id = floor(uv);
-        float timeAndSpeed = uTime * uSpeed;
-
-        for (int y = -1; y <= 1; y++) {
-            for (int x = -1; x <= 1; x++) {
-                vec2 offset = vec2(float(x), float(y));
-                
-                // Optimization: Skip calculations for distant cells
-                if (length(gv - offset) > 1.414) continue;
-
-                vec2 si = id + offset;
-                float seed = Hash21(si);
-                float size = fract(seed * 345.32);
-                
-                float invPeriod = 1.0 / (PERIOD * seed + 1.0);
-                float glossLocal = abs(fract(uStarSpeed * invPeriod) * 2.0 - 1.0);
-                float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
-
-                vec3 base;
-                base.r = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF;
-                base.b = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
-                base.g = min(base.r, base.b) * seed;
-
-                float hue = atan(base.g - base.r, base.b - base.r) / TWO_PI + 0.5;
-                hue = fract(hue + uHueShift); // Use pre-calculated hue shift
-                float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
-                float val = max(max(base.r, base.g), base.b);
-                base = hsv2rgb(vec3(hue, sat, val));
-
-                vec2 pad = vec2(tris(seed * 34.0 + timeAndSpeed * 0.1), tris(seed * 38.0 + timeAndSpeed * 0.0333)) - 0.5;
-                float star = Star(gv - offset - pad, flareSize);
-                
-                float twinkle = mix(1.0, trisn(timeAndSpeed + seed * TWO_PI) * 0.5 + 1.0, uTwinkleIntensity);
-                star *= twinkle;
-
-                col += star * size * base;
-            }
-        }
-        return col;
-    }
-
-    void main() {
-        vec2 focalPx = uFocal * uResolution.xy;
-        vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
-
-        if (uAutoCenterRepulsion > 0.0) {
-            vec2 centerUV = vec2(0.0);
-            float centerDist = length(uv - centerUV);
-            vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1));
-            uv += repulsion * 0.05;
-        } else if (uMouseRepulsion) {
-            vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y;
-            float mouseDist = length(uv - mousePosUV);
-            vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1));
-            uv += repulsion * 0.05 * uMouseActiveFactor;
-        } else {
-            vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor;
-            uv += mouseOffset;
-        }
-
-        float autoRotAngle = uTime * uRotationSpeed;
-        mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle));
-        uv = autoRot * uv;
-        uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv;
-
-        vec3 col = vec3(0.0);
-        for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
-            float depth = fract(i + uStarSpeed * uSpeed);
-            float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth);
-            float fade = depth * smoothstep(1.0, 0.9, depth);
-            col += StarLayer(uv * scale + i * 453.32) * fade;
-        }
-
-        if (uTransparent) {
-            float alpha = length(col);
-            alpha = smoothstep(0.0, 0.3, alpha);
-            gl_FragColor = vec4(col, min(alpha, 1.0));
-        } else {
-            gl_FragColor = vec4(col, 1.0);
-        }
-    }
+// This is the ultra-fast, simplified shader for mobile devices.
+const createMobileFragmentShader = (precision = 'mediump') => `
+    precision ${precision} float;
+    uniform float uTime; uniform vec3 uResolution; uniform vec2 uFocal; uniform vec2 uRotation; uniform float uStarSpeed; uniform float uDensity; uniform float uSpeed; uniform vec2 uMouse; uniform float uGlowIntensity; uniform float uTwinkleIntensity; uniform float uRotationSpeed; uniform bool uTransparent; uniform bool uMouseRepulsion; uniform float uRepulsionStrength; uniform float uMouseActiveFactor; uniform float uAutoCenterRepulsion;
+    varying vec2 vUv;
+    #define NUM_LAYER 3.0
+    #define PI 3.14159265359
+    #define TWO_PI 6.28318530718
+    float Hash21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float Star(vec2 uv, float flare) { float d = length(uv); float m = (0.05 * uGlowIntensity) / (d + 0.0001); float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0)); m += rays * flare; m *= smoothstep(0.8, 0.2, d); return m; }
+    vec3 StarLayer(vec2 uv) { vec3 col = vec3(0.0); vec2 gv = fract(uv) - 0.5; vec2 id = floor(uv); float seed = Hash21(id); float size = fract(seed * 345.32); if (size > 0.1) { float gloss = abs(fract(uTime * 0.1 * uStarSpeed + seed * 5.0) * 2.0 - 1.0); float flare = smoothstep(0.9, 1.0, size) * gloss; float star = Star(gv, flare); float color_seed = fract(seed * 123.45); vec3 base_color = vec3(color_seed * 0.8 + 0.2, color_seed * 0.9 + 0.1, 1.0); float twinkle = mix(1.0, sin(uTime * uSpeed + seed * TWO_PI) * 0.5 + 0.5, uTwinkleIntensity); star *= twinkle; col += star * size * base_color; } return col; }
+    void main() { vec2 focalPx = uFocal * uResolution.xy; vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y; if (uAutoCenterRepulsion > 0.0) { vec2 centerUV = vec2(0.0); float centerDist = length(uv - centerUV); vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1)); uv += repulsion * 0.05; } else if (uMouseRepulsion) { vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y; float mouseDist = length(uv - mousePosUV); vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1)); uv += repulsion * 0.05 * uMouseActiveFactor; } else { vec2 mouseOffset = (uMouse - 0.5) * 0.1 * uMouseActiveFactor; uv += mouseOffset; } float autoRotAngle = uTime * uRotationSpeed; mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle)); uv = autoRot * uv; uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv; vec3 col = vec3(0.0); for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) { float depth = fract(i + uTime * 0.1 * uStarSpeed * uSpeed); float scale = mix(10.0 * uDensity, 0.5 * uDensity, depth); float fade = depth * smoothstep(1.0, 0.9, depth); col += StarLayer(uv * scale + i * 453.32) * fade; } if (uTransparent) { float alpha = length(col); alpha = smoothstep(0.0, 0.1, alpha); gl_FragColor = vec4(col, min(alpha, 1.0)); } else { gl_FragColor = vec4(col, 1.0); } }
 `;
 
 export default memo(function Galaxy({
-    // Optional props for performance tuning
-    precision = 'mediump',
+    mobile = false,
     resolutionScale = 1.0,
-
-    // Original props
-    focal = [0.5, 0.5],
-    rotation = [1.0, 0.0],
-    starSpeed = 0.5,
-    density = 1,
-    hueShift = 140,
-    disableAnimation = false,
-    speed = 1.0,
-    mouseInteraction = true,
-    glowIntensity = 0.3,
-    saturation = 0.0,
-    mouseRepulsion = true,
-    repulsionStrength = 2,
-    twinkleIntensity = 0.3,
-    rotationSpeed = 0.1,
-    autoCenterRepulsion = 0,
-    transparent = true,
+    precision = 'mediump',
+    // All original props
+    focal = [0.5, 0.5], rotation = [1.0, 0.0], starSpeed = 0.5, density = 1, hueShift = 140, disableAnimation = false, speed = 1.0, mouseInteraction = true, glowIntensity = 0.3, saturation = 0.0, mouseRepulsion = true, repulsionStrength = 2, twinkleIntensity = 0.3, rotationSpeed = 0.1, autoCenterRepulsion = 0, transparent = true,
     ...rest
 }) {
     const ctnDom = useRef(null);
     const glState = useRef({});
+    const propsRef = useRef({});
     const targetMousePos = useRef({ x: 0.5, y: 0.5 });
     const smoothMousePos = useRef({ x: 0.5, y: 0.5 });
     const targetMouseActive = useRef(0.0);
     const smoothMouseActive = useRef(0.0);
-    const propsRef = useRef({});
 
     useEffect(() => {
         propsRef.current = { starSpeed, disableAnimation, transparent };
     });
 
-    // Effect for ONE-TIME setup
+    // This setup hook runs only when a critical setting (like switching to mobile) changes.
     useEffect(() => {
         const ctn = ctnDom.current;
         if (!ctn) return;
 
-        const fragment = createFragmentShader(precision);
+        const fragment = mobile
+            ? createMobileFragmentShader(precision)
+            : createDesktopFragmentShader(precision);
+
         const renderer = new Renderer({ alpha: true, premultipliedAlpha: false });
         const gl = renderer.gl;
-        glState.current.gl = gl;
         ctn.appendChild(gl.canvas);
 
         const program = new Program(gl, {
@@ -217,7 +86,7 @@ export default memo(function Galaxy({
         });
 
         const mesh = new Mesh(gl, { geometry: new Triangle(gl), program });
-        glState.current.program = program;
+        glState.current = { gl, program, renderer, mesh };
 
         const resize = () => {
             const dpr = Math.min(window.devicePixelRatio, 2);
@@ -242,7 +111,7 @@ export default memo(function Galaxy({
         const update = (t) => {
             animateId = requestAnimationFrame(update);
             const { disableAnimation: currentDisable, starSpeed: currentStarSpeed, transparent: currentTransparent } = propsRef.current;
-            
+
             if (currentTransparent) {
                 gl.clearColor(0, 0, 0, 0);
                 gl.enable(gl.BLEND);
@@ -255,9 +124,9 @@ export default memo(function Galaxy({
             if (!currentDisable) {
                 const timeInSeconds = t * 0.001;
                 program.uniforms.uTime.value = timeInSeconds;
-                program.uniforms.uStarSpeed.value = (timeInSeconds * currentStarSpeed) * 0.1;
+                program.uniforms.uStarSpeed.value = mobile ? currentStarSpeed : (timeInSeconds * currentStarSpeed) * 0.1;
             }
-
+            
             const lerpFactor = 0.05;
             smoothMousePos.current.x += (targetMousePos.current.x - smoothMousePos.current.x) * lerpFactor;
             smoothMousePos.current.y += (targetMousePos.current.y - smoothMousePos.current.y) * lerpFactor;
@@ -277,15 +146,18 @@ export default memo(function Galaxy({
                 ctn.removeEventListener("mousemove", handleMouseMove);
                 ctn.removeEventListener("mouseleave", handleMouseLeave);
             }
-            if (ctn.contains(gl.canvas)) { ctn.removeChild(gl.canvas); }
+            if (ctn.contains(gl.canvas)) {
+                ctn.removeChild(gl.canvas);
+            }
             gl.getExtension("WEBGL_lose_context")?.loseContext();
         };
-    }, [precision, resolutionScale, mouseInteraction, mouseRepulsion]); // Re-run setup only for these critical changes
+    }, [mobile, precision, resolutionScale, mouseInteraction, mouseRepulsion]);
 
-    // Effect for updating props efficiently
+    // This hook efficiently updates props without rebuilding the entire scene.
     useEffect(() => {
-        if (!glState.current.program) return;
         const { program } = glState.current;
+        if (!program) return;
+        
         program.uniforms.uFocal.value.set(focal);
         program.uniforms.uRotation.value.set(rotation);
         program.uniforms.uDensity.value = density;
@@ -299,7 +171,7 @@ export default memo(function Galaxy({
         program.uniforms.uRepulsionStrength.value = repulsionStrength;
         program.uniforms.uAutoCenterRepulsion.value = autoCenterRepulsion;
         program.uniforms.uTransparent.value = transparent;
-    }, [focal, rotation, starSpeed, density, hueShift, disableAnimation, speed, glowIntensity, saturation, mouseRepulsion, twinkleIntensity, rotationSpeed, repulsionStrength, autoCenterRepulsion, transparent]);
+    }, [focal, rotation, density, hueShift, speed, glowIntensity, saturation, mouseRepulsion, twinkleIntensity, rotationSpeed, repulsionStrength, autoCenterRepulsion, transparent]);
 
     return <div ref={ctnDom} className="w-full h-full relative" {...rest} />;
 });
