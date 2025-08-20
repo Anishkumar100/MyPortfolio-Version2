@@ -49,7 +49,7 @@ export default memo(function Galaxy({
     resolutionScale = 1.0,
     precision = 'mediump',
     // All original props
-    focal = [0.5, 0.5], rotation = [1.0, 0.0], starSpeed = 0.5, density = 1, hueShift = 140, disableAnimation = false, speed = 1.0, mouseInteraction = true, glowIntensity = 0.3, saturation = 0.0, mouseRepulsion = true, repulsionStrength = 2, twinkleIntensity = 0.3, rotationSpeed = 0.1, autoCenterRepulsion = 0, transparent = true,
+    focal = [0.5, 0.5], rotation = [1.0, 0.0], starSpeed = 0.5, density = 1, hueShift = 140, disableAnimation = false, speed = 1.0, mouseInteraction = true, glowIntensity = 0.3, saturation = 1, mouseRepulsion = true, repulsionStrength = 2, twinkleIntensity = 0.8, rotationSpeed = 0.1, autoCenterRepulsion = 0, transparent = true,
     ...rest
 }) {
     const ctnDom = useRef(null);
