@@ -1,30 +1,28 @@
 import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
 import { useEffect, useRef } from "react";
 
-// --- SHADERS (with micro-optimizations) ---
-
+// The vertex shader remains the same
 const vertexShader = `
     attribute vec2 uv;
     attribute vec2 position;
     varying vec2 vUv;
-
     void main() {
         vUv = uv;
         gl_Position = vec4(position, 0, 1);
     }
 `;
 
-const fragmentShader = `
-    precision highp float;
+// The fragment shader is now templatized to accept a precision setting
+const createFragmentShader = (precision = 'highp') => `
+    precision ${precision} float;
 
-    // Uniforms are now updated efficiently by the React component
     uniform float uTime;
     uniform vec3 uResolution;
     uniform vec2 uFocal;
     uniform vec2 uRotation;
     uniform float uStarSpeed;
     uniform float uDensity;
-    uniform float uHueShift; // This will now be pre-calculated (0.0 to 1.0)
+    uniform float uHueShift;
     uniform float uSpeed;
     uniform vec2 uMouse;
     uniform float uGlowIntensity;
@@ -44,6 +42,7 @@ const fragmentShader = `
     #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
     #define PERIOD 3.0
     #define PI 3.14159265359
+    #define TWO_PI 6.28318530718
 
     float Hash21(vec2 p) {
         p = fract(p * vec2(123.34, 456.21));
@@ -82,13 +81,18 @@ const fragmentShader = `
         vec2 gv = fract(uv) - 0.5;
         vec2 id = floor(uv);
 
+        float timeAndSpeed = uTime * uSpeed;
+
         for (int y = -1; y <= 1; y++) {
             for (int x = -1; x <= 1; x++) {
                 vec2 offset = vec2(float(x), float(y));
                 vec2 si = id + offset;
                 float seed = Hash21(si);
                 float size = fract(seed * 345.32);
-                float glossLocal = abs(fract(uStarSpeed / (PERIOD * seed + 1.0)) * 2.0 - 1.0);
+                
+                // OPTIMIZED: Replaced division with multiplication
+                float invPeriod = 1.0 / (PERIOD * seed + 1.0);
+                float glossLocal = abs(fract(uStarSpeed * invPeriod) * 2.0 - 1.0);
                 float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
 
                 vec3 base;
@@ -96,16 +100,16 @@ const fragmentShader = `
                 base.b = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
                 base.g = min(base.r, base.b) * seed;
 
-                float hue = atan(base.g - base.r, base.b - base.r) / (2.0 * PI) + 0.5;
-                hue = fract(hue + uHueShift); // Use pre-calculated hue shift
+                float hue = atan(base.g - base.r, base.b - base.r) / TWO_PI + 0.5;
+                hue = fract(hue + uHueShift);
                 float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
                 float val = max(max(base.r, base.g), base.b);
                 base = hsv2rgb(vec3(hue, sat, val));
 
-                vec2 pad = vec2(tris(seed * 34.0 + uTime * uSpeed / 10.0), tris(seed * 38.0 + uTime * uSpeed / 30.0)) - 0.5;
+                vec2 pad = vec2(tris(seed * 34.0 + timeAndSpeed * 0.1), tris(seed * 38.0 + timeAndSpeed * 0.0333)) - 0.5;
                 float star = Star(gv - offset - pad, flareSize);
                 
-                float twinkle = mix(1.0, trisn(uTime * uSpeed + seed * (2.0 * PI)) * 0.5 + 1.0, uTwinkleIntensity);
+                float twinkle = mix(1.0, trisn(timeAndSpeed + seed * TWO_PI) * 0.5 + 1.0, uTwinkleIntensity);
                 star *= twinkle;
 
                 col += star * size * base;
@@ -118,9 +122,8 @@ const fragmentShader = `
         vec2 focalPx = uFocal * uResolution.xy;
         vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
 
-        // Mouse/Repulsion logic (unchanged)
         if (uAutoCenterRepulsion > 0.0) {
-            vec2 centerUV = vec2(0.0, 0.0);
+            vec2 centerUV = vec2(0.0);
             float centerDist = length(uv - centerUV);
             vec2 repulsion = normalize(uv - centerUV) * (uAutoCenterRepulsion / (centerDist + 0.1));
             uv += repulsion * 0.05;
@@ -141,7 +144,6 @@ const fragmentShader = `
 
         vec3 col = vec3(0.0);
 
-        // Main render loop for layers
         for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
             float depth = fract(i + uStarSpeed * uSpeed);
             float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth);
@@ -158,6 +160,7 @@ const fragmentShader = `
         }
     }
 `;
+
 
 export default function Galaxy({
     focal = [0.5, 0.5],
@@ -176,42 +179,40 @@ export default function Galaxy({
     rotationSpeed = 0.1,
     autoCenterRepulsion = 0,
     transparent = true,
+    precision = 'mediump', // <-- NEW PROP: 'highp' or 'mediump'
     ...rest
 }) {
     const ctnDom = useRef(null);
-    const glState = useRef({}); // Use a single ref to hold all WebGL state
-    
-    // Refs for smooth mouse tracking
+    const glState = useRef({});
     const targetMousePos = useRef({ x: 0.5, y: 0.5 });
     const smoothMousePos = useRef({ x: 0.5, y: 0.5 });
     const targetMouseActive = useRef(0.0);
     const smoothMouseActive = useRef(0.0);
 
-    // --- EFFECT 1: ONE-TIME SETUP ---
-    // This effect runs only once to initialize the WebGL context and scene.
+    // Store props in a ref to ensure the animation loop always has the latest values
+    const propsRef = useRef({});
     useEffect(() => {
-        if (!ctnDom.current) return;
-        const ctn = ctnDom.current;
+      propsRef.current = { starSpeed, disableAnimation };
+    });
 
-        const renderer = new Renderer({
-            alpha: transparent,
-            premultipliedAlpha: false,
-        });
+    useEffect(() => {
+        const ctn = ctnDom.current;
+        if (!ctn) return;
+
+        const renderer = new Renderer({ alpha: transparent, premultipliedAlpha: false });
         const gl = renderer.gl;
         glState.current.gl = gl;
-        glState.current.renderer = renderer;
         ctn.appendChild(gl.canvas);
 
         if (transparent) {
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         }
-        
-        const geometry = new Triangle(gl);
 
+        const fragment = createFragmentShader(precision);
         const program = new Program(gl, {
             vertex: vertexShader,
-            fragment: fragmentShader,
+            fragment: fragment,
             uniforms: {
                 uTime: { value: 0 },
                 uResolution: { value: new Color(0, 0, 0) },
@@ -219,7 +220,7 @@ export default function Galaxy({
                 uRotation: { value: new Float32Array(rotation) },
                 uStarSpeed: { value: 0 },
                 uDensity: { value: density },
-                uHueShift: { value: hueShift / 360.0 }, // Pre-calculate
+                uHueShift: { value: hueShift / 360.0 },
                 uSpeed: { value: speed },
                 uMouse: { value: new Float32Array([0.5, 0.5]) },
                 uGlowIntensity: { value: glowIntensity },
@@ -233,24 +234,17 @@ export default function Galaxy({
                 uTransparent: { value: transparent },
             },
         });
+
+        const mesh = new Mesh(gl, { geometry: new Triangle(gl), program });
         glState.current.program = program;
 
-        const mesh = new Mesh(gl, { geometry, program });
-        glState.current.mesh = mesh;
-
-        // Resize handler
         const resize = () => {
             renderer.setSize(ctn.offsetWidth, ctn.offsetHeight);
-            program.uniforms.uResolution.value.set(
-                gl.canvas.width,
-                gl.canvas.height,
-                gl.canvas.width / gl.canvas.height
-            );
+            program.uniforms.uResolution.value.set(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height);
         };
         window.addEventListener("resize", resize, false);
         resize();
 
-        // Mouse listeners
         const handleMouseMove = (e) => {
             const rect = ctn.getBoundingClientRect();
             targetMousePos.current = {
@@ -259,23 +253,23 @@ export default function Galaxy({
             };
             targetMouseActive.current = 1.0;
         };
-        const handleMouseLeave = () => {
-            targetMouseActive.current = 0.0;
-        };
+        const handleMouseLeave = () => { targetMouseActive.current = 0.0; };
 
         if (mouseInteraction) {
             ctn.addEventListener("mousemove", handleMouseMove);
             ctn.addEventListener("mouseleave", handleMouseLeave);
         }
-        
-        // Animation loop
+
         let animateId;
         const update = (t) => {
             animateId = requestAnimationFrame(update);
+            
+            const { disableAnimation: currentDisable, starSpeed: currentStarSpeed } = propsRef.current;
 
-            if (!disableAnimation) {
-                program.uniforms.uTime.value = t * 0.001;
-                program.uniforms.uStarSpeed.value = (t * 0.001 * starSpeed) / 10.0;
+            if (!currentDisable) {
+                const timeInSeconds = t * 0.001;
+                program.uniforms.uTime.value = timeInSeconds;
+                program.uniforms.uStarSpeed.value = (timeInSeconds * currentStarSpeed) * 0.1;
             }
 
             const lerpFactor = 0.05;
@@ -291,7 +285,6 @@ export default function Galaxy({
         };
         animateId = requestAnimationFrame(update);
 
-        // Cleanup
         return () => {
             cancelAnimationFrame(animateId);
             window.removeEventListener("resize", resize);
@@ -299,13 +292,13 @@ export default function Galaxy({
                 ctn.removeEventListener("mousemove", handleMouseMove);
                 ctn.removeEventListener("mouseleave", handleMouseLeave);
             }
-            ctn.removeChild(gl.canvas);
+            if (ctn.contains(gl.canvas)) {
+                ctn.removeChild(gl.canvas);
+            }
             gl.getExtension("WEBGL_lose_context")?.loseContext();
         };
-    }, []); // <-- Empty dependency array ensures this runs only ONCE.
+    }, [precision, transparent]); // Re-create only if precision or transparency changes
 
-    // --- EFFECT 2: PROP UPDATES ---
-    // This lightweight effect runs whenever props change to update uniforms.
     useEffect(() => {
         if (!glState.current.program) return;
         const { program } = glState.current;
@@ -313,7 +306,7 @@ export default function Galaxy({
         program.uniforms.uFocal.value.set(focal);
         program.uniforms.uRotation.value.set(rotation);
         program.uniforms.uDensity.value = density;
-        program.uniforms.uHueShift.value = hueShift / 360.0; // Pre-calculate
+        program.uniforms.uHueShift.value = hueShift / 360.0;
         program.uniforms.uSpeed.value = speed;
         program.uniforms.uGlowIntensity.value = glowIntensity;
         program.uniforms.uSaturation.value = saturation;
@@ -322,21 +315,11 @@ export default function Galaxy({
         program.uniforms.uRotationSpeed.value = rotationSpeed;
         program.uniforms.uRepulsionStrength.value = repulsionStrength;
         program.uniforms.uAutoCenterRepulsion.value = autoCenterRepulsion;
-        
     }, [
-        focal, rotation, density, hueShift, speed, glowIntensity, 
-        saturation, mouseRepulsion, twinkleIntensity, rotationSpeed, 
+        focal, rotation, density, hueShift, speed, glowIntensity,
+        saturation, mouseRepulsion, twinkleIntensity, rotationSpeed,
         repulsionStrength, autoCenterRepulsion
     ]);
-
-    // Update starSpeed separately as it's used in the animation loop
-    useEffect(() => {
-        if (!glState.current.program) return;
-        // This is a bit of a trick to update the value used within the animation frame
-        // without adding it to the main prop-update effect.
-        glState.current.starSpeed = starSpeed;
-    }, [starSpeed]);
-
 
     return <div ref={ctnDom} className="w-full h-full relative" {...rest} />;
 }
